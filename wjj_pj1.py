@@ -1,3 +1,4 @@
+import datetime
 import sys, os
 import time
 from dataclasses import dataclass, field
@@ -11,17 +12,26 @@ bill_id = 0
 class personage:
     name: str = field(default=None)
     account: list = field(default=None)
+    def __init__(self , name, account=None):
+        self.name = name
 
 @dataclass(repr=False)
 class bill_item:
     id: int = field(default=None)
-    timestamp: int = field(default=None)
-    date: str = field(default=None)
-    time: str = field(default=None)
+    date: datetime = field(default=None)
     payer_info: personage = field(default=None)
     payee_info: personage = field(default=None)
     type: int = field(default=None)
     figure: float = field(default=None)
+    def __init__(self, date=None, payer_info=None, payee_info=None, type=None, figure=None):
+        global bill_id
+        self.id = bill_id
+        bill_id +=1
+        self.date = date
+        self.payer_info = payer_info
+        self.payee_info = payee_info
+        self.type = type
+        self.figure = figure
 
 @dataclass(repr=False)
 class personage_info(personage):
@@ -31,7 +41,7 @@ class personage_info(personage):
 
     def __init__(self, _name):
         super().__init__(_name)
-
+        self.bill = []
     # def __post_init__(self):
     #     self.total_price = self.price * self.count
     #
@@ -51,7 +61,6 @@ def softID(_it, _itl, _score):
     return max_key_value[0], max_key_value[1]
 
 def loadxlsx(_sheet, type, ac_info):
-    backdata = None
     if _sheet.max_row < 2:
         return None
 
@@ -69,7 +78,7 @@ def loadxlsx(_sheet, type, ac_info):
                 break
     print(tag_map)
     for i in range(_sheet.max_row + 1):
-        if i < 2:
+        if i < 3:
             continue
         date1 = _sheet.cell(row=i, column=tag_map['日期']).value if '日期' in tag_map.keys() else None
         time1 = _sheet.cell(row=i, column=tag_map['时间1']).value if '时间1' in tag_map.keys() else None
@@ -84,16 +93,57 @@ def loadxlsx(_sheet, type, ac_info):
 
         if p1 is None and p2 is None:
             continue
-        if date2 is None and date1:
-            date2 = date1
-            if time2 is None and time1:
-                time2 = time1
-        bill_A = bill_item(id=bill_id, timestamp=)
+        try:
+            p1=int(p1) if p1 is not None else None
+            p2=int(p2) if p2 is not None else None
+        except:
+            print('{}用户的金额 的单元格 异常 : L {}'.format(ac_info.name, i))
+        if not isinstance(p1, (int, float)) and not isinstance(p2, (int, float)):
+            print('{}用户的金额 的单元格 异常 : L {}'.format(ac_info.name, i))
+            continue
 
-        ttype = type
-        data_type = 1 if ttype else 0
-        data_name = _sheet.cell(row=i, column=2).value
-        data_price = _sheet.cell(row=i, column=6).value
+        if not isinstance(date1, datetime.datetime) and date1:
+            if '.' in date1:
+                date1 = datetime.datetime.strptime(date1, '%Y.%m.%d')
+            elif '-' in date1:
+                date1 = datetime.datetime.strptime(date1, '%Y-%m-%d')
+            else:
+                date1 = datetime.datetime.strptime(date1.replace("\t", "").replace('号','日'), '%Y年%m月%d日')
+        if not isinstance(date2, datetime.datetime) and date2:
+            if '.' in date2:
+                date2 = datetime.datetime.strptime(date2, '%Y.%m.%d')
+            elif '-' in date2:
+                date2 = datetime.datetime.strptime(date2, '%Y-%m-%d')
+            else:
+                date2 = datetime.datetime.strptime(date2.replace("\t", "").replace('号','日'), '%Y年%m月%d日')
+
+        if not isinstance(time1, datetime.time) and time1:
+            if ':' in time1:
+                time1 = datetime.datetime.strptime(time1, '%H:%M:%S')
+            else:
+                time1 = datetime.time(0,0)
+        if not isinstance(time2, datetime.time) and time2:
+            if ':' in time2:
+                time2 = datetime.datetime.strptime(time2, '%H:%M:%S')
+            else:
+                time2 = datetime.time(0,0)
+
+        if isinstance(p1, int):
+            time1 = datetime.time(0,0) if time1 is not isinstance(time1, datetime.datetime) else time1
+            date1 = datetime.datetime(0,0, 0) if date1 is None else date1
+            date1 = date1.replace(hour=time1.hour, minute=time1.minute, second=time1.second)
+            bill_A = bill_item(payer_info=personage(send1), payee_info=personage(recv1),
+                               figure=p1, date=date1, type=0)
+            ac_info.bill.append(bill_A)
+
+        if isinstance(p2, int) :
+            time1 = datetime.time(0,0) if time1 is not isinstance(time1, datetime.datetime) else time1
+            time2 = time1 if time2 is None else time2
+            date2 = date1 if date2 is None else date2
+            date2 = date2.replace(hour=time2.hour, minute=time2.minute, second=time2.second)
+            bill_A = bill_item(payer_info=personage(send2), payee_info=personage(recv2),
+                               figure=p2, date=date2, type=1)
+            ac_info.bill.append(bill_A)
 
     return
     for i in range(_sheet.max_row + 1):
@@ -149,9 +199,13 @@ def load_data(_data_p):
             print('create ac : {}'.format(ac_name))
             Collated_D[ac_name] = personage_info(ac_name)
 
+        # if ac_name == '行长':
+        #     continue
         workbook = openpyxl.load_workbook(file, data_only=True)
         sheet = workbook['data']
         loadxlsx(sheet, 0, Collated_D[ac_name])
+
+    print('done')
 
 
 def foo(data_root_path, output_path):
