@@ -1,32 +1,44 @@
 import sys, os
 import time
 from dataclasses import dataclass, field
-import json
+import json, time
 import openpyxl
 from thefuzz import fuzz
 
+row_tag = [['转出日期', '日期'],'时间1','银行','转出账号','转出金额',['转入', '转入日期'],['转入时间', '时间', '时间2'],'付款账号','收到账号','转入金额','备注']
+bill_id = 0
 @dataclass(repr=False)
-class commodity_info:
-    id: str = field(default=None)
-    count: int = field(default=1)
+class personage:
+    name: str = field(default=None)
+    account: list = field(default=None)
+
+@dataclass(repr=False)
+class bill_item:
+    id: int = field(default=None)
+    timestamp: int = field(default=None)
+    date: str = field(default=None)
+    time: str = field(default=None)
+    payer_info: personage = field(default=None)
+    payee_info: personage = field(default=None)
+    type: int = field(default=None)
+    figure: float = field(default=None)
+
+@dataclass(repr=False)
+class personage_info(personage):
+    bill: list[bill_item] = field(default=None)
     total_count: int = field(default=0)
-    type: int = field(default=0)
-    name: str = field(default='')
-    name_another: str = field(default='')
-    price: float = field(default=None)
-    total_price: float = field(default=None)
+    # name_another: str = field(default=None)
 
-    geishitang: float = field(default=None)
-    geiyuangong: float = field(default=None)
+    def __init__(self, _name):
+        super().__init__(_name)
 
-    def __post_init__(self):
-        self.total_price = self.price * self.count
-
-    def take(self):
-        self.total_count = self.total_count - self.count
-
-    def addcount(self, _count):
-        self.total_count = self.total_count + 1 * _count
+    # def __post_init__(self):
+    #     self.total_price = self.price * self.count
+    #
+    # def take(self):
+    #     self.total_count = self.total_count - self.count
+    # def addcount(self, _count):
+    #     self.total_count = self.total_count + 1 * _count
 
 def softID(_it, _itl, _score):
     res_score = {}
@@ -38,9 +50,52 @@ def softID(_it, _itl, _score):
     # print(sorted_dict)
     return max_key_value[0], max_key_value[1]
 
-def loaddata(_sheet, type):
+def loadxlsx(_sheet, type, ac_info):
     backdata = None
-    global commodity_data
+    if _sheet.max_row < 2:
+        return None
+
+    tag_map = {}
+    tags = list(_sheet[2])
+    index = 0
+    for it in row_tag:
+        for cell in tags[index:]:  # 获取第 2 行的所有单元格
+            if cell.value and cell.value in it:
+                if isinstance(it, list):
+                    tag_map[it[-1]] = cell.column
+                else:
+                    tag_map[it] = cell.column
+                index += 1
+                break
+    print(tag_map)
+    for i in range(_sheet.max_row + 1):
+        if i < 2:
+            continue
+        date1 = _sheet.cell(row=i, column=tag_map['日期']).value if '日期' in tag_map.keys() else None
+        time1 = _sheet.cell(row=i, column=tag_map['时间1']).value if '时间1' in tag_map.keys() else None
+        send1 = _sheet.cell(row=i, column=tag_map['银行']).value if '银行' in tag_map.keys() else None
+        recv1 = _sheet.cell(row=i, column=tag_map['转出账号']).value if '转出账号' in tag_map.keys() else None
+        p1 = _sheet.cell(row=i, column=tag_map['转出金额']).value if '转出金额' in tag_map.keys() else None
+        date2 = _sheet.cell(row=i, column=tag_map['转入日期']).value if '转入日期' in tag_map.keys() else None
+        time2 = _sheet.cell(row=i, column=tag_map['时间2']).value if '时间2' in tag_map.keys() else None
+        send2 = _sheet.cell(row=i, column=tag_map['付款账号']).value if '付款账号' in tag_map.keys() else None
+        recv2 = _sheet.cell(row=i, column=tag_map['收到账号']).value if '收到账号' in tag_map.keys() else None
+        p2 = _sheet.cell(row=i, column=tag_map['转入金额']).value if '转入金额' in tag_map.keys() else None
+
+        if p1 is None and p2 is None:
+            continue
+        if date2 is None and date1:
+            date2 = date1
+            if time2 is None and time1:
+                time2 = time1
+        bill_A = bill_item(id=bill_id, timestamp=)
+
+        ttype = type
+        data_type = 1 if ttype else 0
+        data_name = _sheet.cell(row=i, column=2).value
+        data_price = _sheet.cell(row=i, column=6).value
+
+    return
     for i in range(_sheet.max_row + 1):
         if i < 2:
             continue
@@ -66,8 +121,43 @@ def loaddata(_sheet, type):
 
 commodity_data={}
 
-def foo(commodity_data_path, src_data_path, resultname):
+def get_path_formR(_data_p):
+    for root, dirs, _ in os.walk(_data_p):
+        if len(dirs) < 1:
+            print('目录未找到人员文件夹')
+            return None, None
+        for ac_dir in dirs:
+            for ac_p, _, files in os.walk(os.path.join(root, ac_dir)):
+                xlsxDs = []
+                for it_f in files:
+                    if it_f.endswith('xlsx'):
+                        xlsxDs.append(it_f)
+                if len(xlsxDs) < 1:
+                    print('{} 人员文件夹 没有xlsx 数据'.format(ac_p))
+                for it_f in xlsxDs:
+                    t_file = os.path.join(ac_p, it_f)
+                    print('load file : {}'.format(t_file))
+                    yield ac_dir, t_file
 
+
+def load_data(_data_p):
+    Collated_D = {}
+    for ac_name, file in get_path_formR(_data_p):
+        if ac_name is None:
+            continue
+        if ac_name not in Collated_D.keys():
+            print('create ac : {}'.format(ac_name))
+            Collated_D[ac_name] = personage_info(ac_name)
+
+        workbook = openpyxl.load_workbook(file, data_only=True)
+        sheet = workbook['data']
+        loadxlsx(sheet, 0, Collated_D[ac_name])
+
+
+def foo(data_root_path, output_path):
+    load_data(data_root_path)
+
+    return None
 
     workbook = openpyxl.load_workbook(commodity_data_path, data_only=True)
     sheet = workbook['仓发1']
@@ -219,12 +309,8 @@ def foo(commodity_data_path, src_data_path, resultname):
 
 
 if __name__ == '__main__':
-    info = input("请将所有文件放在同一目录，导出文件将在同一目录下生成。确认按回车")
-    i1_input = input("请输入商品文件名(不带文件名后缀 xxx.xlsx): ")
-    i2_input = input("请输入客户文件名(不带文件名后缀 xxx.xlsx): ")
-    o1_output = input("请输入导出文件名（不用后缀 xxx）: ")
-    print("商品文件名: ", i1_input)
-    print("客户文件名: ", i2_input)
-    print("导出文件名: ", o1_output)
-    root_path = './data/yyw/'
-    foo(root_path + i1_input + '.xlsx', root_path + i2_input + '.xlsx', root_path + o1_output)
+    root_path = 'data/wjj'
+    pj_path = 'pj1'
+    output_path = 'output'
+
+    foo(os.path.join(root_path, pj_path), os.path.join(root_path, output_path))
