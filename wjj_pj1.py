@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 import json, time
 import openpyxl
 from thefuzz import fuzz
+import pandas as pd
 
 row_tag = [['转出日期', '日期'],'时间1','银行','转出账号','转出金额',['转入', '转入日期'],['转入时间', '时间', '时间2'],'付款账号','收到账号','转入金额','备注']
 bill_id = 0
@@ -19,15 +20,17 @@ class personage:
 class bill_item:
     id: int = field(default=None)
     date: datetime = field(default=None)
+    from_ac: str = field(default=None)
     payer_info: personage = field(default=None)
     payee_info: personage = field(default=None)
     type: int = field(default=None)
     figure: float = field(default=None)
-    def __init__(self, date=None, payer_info=None, payee_info=None, type=None, figure=None):
+    def __init__(self, date=None, payer_info=None, from_ac=None, payee_info=None, type=None, figure=None):
         global bill_id
         self.id = bill_id
         bill_id +=1
         self.date = date
+        self.from_ac = from_ac
         self.payer_info = payer_info
         self.payee_info = payee_info
         self.type = type
@@ -60,7 +63,25 @@ def softID(_it, _itl, _score):
     # print(sorted_dict)
     return max_key_value[0], max_key_value[1]
 
-def loadxlsx(_sheet, type, ac_info):
+def create_folder_if_not_exists(folder_path):
+    # 判断文件夹是否存在
+    if not os.path.exists(folder_path):
+        # 递归创建文件夹
+        os.makedirs(folder_path)
+        print(f"文件夹 '{folder_path}' 创建成功")
+    else:
+        print(f"文件夹 '{folder_path}' 已存在")
+
+def generate_timestamp_filename(extension):
+    # 获取当前时间
+    now = datetime.datetime.now()
+    # 格式化时间字符串
+    timestamp = now.strftime("%Y%m%d_%H%M%S")
+    # 生成文件名
+    filename = f"{timestamp}.{extension}"
+    return filename
+
+def loadxlsx(_sheet, type, ac_info, all_bill):
     if _sheet.max_row < 2:
         return None
 
@@ -132,44 +153,20 @@ def loadxlsx(_sheet, type, ac_info):
             time1 = datetime.time(0,0) if time1 is not isinstance(time1, datetime.datetime) else time1
             date1 = datetime.datetime(0,0, 0) if date1 is None else date1
             date1 = date1.replace(hour=time1.hour, minute=time1.minute, second=time1.second)
-            bill_A = bill_item(payer_info=personage(send1), payee_info=personage(recv1),
+            bill_A = bill_item(payer_info=personage(send1), payee_info=personage(recv1), from_ac=ac_info.name,
                                figure=p1, date=date1, type=0)
             ac_info.bill.append(bill_A)
+            all_bill.append(bill_A)
 
         if isinstance(p2, int) :
             time1 = datetime.time(0,0) if time1 is not isinstance(time1, datetime.datetime) else time1
             time2 = time1 if time2 is None else time2
             date2 = date1 if date2 is None else date2
             date2 = date2.replace(hour=time2.hour, minute=time2.minute, second=time2.second)
-            bill_A = bill_item(payer_info=personage(send2), payee_info=personage(recv2),
+            bill_B = bill_item(payer_info=personage(send2), payee_info=personage(recv2), from_ac=ac_info.name,
                                figure=p2, date=date2, type=1)
-            ac_info.bill.append(bill_A)
-
-    return
-    for i in range(_sheet.max_row + 1):
-        if i < 2:
-            continue
-        data_id = _sheet.cell(row=i, column=1).value
-        ttype = type
-        data_type = 1 if ttype else 0
-        data_name = _sheet.cell(row=i, column=2).value
-        data_price = _sheet.cell(row=i, column=6).value
-        # data_tcount = sheet.cell(row=i, column=9).value
-        data_tcount = 0
-
-        st = _sheet.cell(row=i, column=7).value
-        yg = _sheet.cell(row=i, column=8).value
-
-        if data_name is None:
-            continue
-        data_count = 1
-        # if '金龙鱼' in data_name or '维达' in data_name:
-        #     data_count = 2
-
-        t_commodity = commodity_info(id=data_id, count=data_count, total_count=data_tcount, type=data_type, name=data_name, price=data_price, geishitang=st, geiyuangong=yg)
-        commodity_data[data_name + str(data_type)] = t_commodity
-
-commodity_data={}
+            ac_info.bill.append(bill_B)
+            all_bill.append(bill_B)
 
 def get_path_formR(_data_p):
     for root, dirs, _ in os.walk(_data_p):
@@ -192,6 +189,7 @@ def get_path_formR(_data_p):
 
 def load_data(_data_p):
     Collated_D = {}
+    A_Bill_D = []
     for ac_name, file in get_path_formR(_data_p):
         if ac_name is None:
             continue
@@ -203,163 +201,108 @@ def load_data(_data_p):
         #     continue
         workbook = openpyxl.load_workbook(file, data_only=True)
         sheet = workbook['data']
-        loadxlsx(sheet, 0, Collated_D[ac_name])
+        loadxlsx(sheet, 0, Collated_D[ac_name], A_Bill_D)
 
-    print('done')
+    A_Bill_D = sorted(A_Bill_D, key=lambda x: x.date)
+    print('load data done')
+    return Collated_D, A_Bill_D
 
+def export_data(_data, _o_p):
+    Collated_D, A_Bill_D = _data
 
-def foo(data_root_path, output_path):
-    load_data(data_root_path)
-
-    return None
-
-    workbook = openpyxl.load_workbook(commodity_data_path, data_only=True)
-    sheet = workbook['仓发1']
-    loaddata(sheet, 0)
-    sheet = workbook['代发1']
-    loaddata(sheet, 1)
-
-
-
-    workbook = openpyxl.load_workbook(src_data_path, data_only=True)
-    sheet = workbook['Sheet1']
+    create_folder_if_not_exists(_o_p)
+    t_o_p = os.path.join(_o_p, generate_timestamp_filename('xlsx'))
+    print('输出文件为：{}'.format(t_o_p))
 
     wb = openpyxl.Workbook()
     # 选择默认的工作表
     # wsheet = wb.active
-    ws1 = wb.create_sheet('代发')
-    ws2 = wb.create_sheet('直发')
-    ws3 = wb.create_sheet('other')
+    ws_1 = wb.create_sheet('gyq')
 
-    # 给工作表重命名
-    # wsheet.title = 'data'
+    Date_B_D = {}
+    for it in A_Bill_D:
+        if it.date.date() not in Date_B_D.keys():
+            Date_B_D[it.date.date()] = []
+        Date_B_D[it.date.date()].append(it)
 
-    # 最大行 sheet.max_row # 最大列 sheet.max_column
-    backdata = None
+    res_date = []
+    res_time = []
+    res_bz = []
+    res_price = []
+    res_ac_tg = []
+    total_price = [0, 0]
 
-    totalAcountprice = {}
-    # titleNameList = ['订单号', '姓名', '电话', '商家SKU编码', '单价', '数量', '应付', '实付', '收货人', '收货手机号', '省', '市', '区', '地址', '买家留言'] # back
-    titleNameList = ['商品编号', '商品价格', '商品数量', '买家应付货款', '收货人名称', '联系电话', '联系手机', '省', '市', '区', '街道', '地址', '发票抬头', '买家留言', '收货人应付邮费'] # 0311
-    for i in range(sheet.max_row + 1):
-        if i < 2:
-            if i == 1:
-                ws1.append(titleNameList)
-                ws2.append(titleNameList)
-                # ws3.append(['商品编号', '商品名称', '销售总数', '下单价', '给食堂', '给员工', '总金额'])
-                ws3.append(['商品编号', '商品名称', '销售总数', '下单价', '下单价总金额', '员工价', '员工价总金额', '食堂价', '食堂价总金额'])
-            continue
-        data_id = sheet.cell(row=i, column=1).value
-        data_name = sheet.cell(row=i, column=2).value
-        data_ipone = sheet.cell(row=i, column=3).value
-        data_d1 = sheet.cell(row=i, column=4).value
-        data_d2 = sheet.cell(row=i, column=5).value
-        data_sname = sheet.cell(row=i, column=6).value
-        data_sipone = sheet.cell(row=i, column=7).value
-        data_saddr = sheet.cell(row=i, column=8).value
-        data_saddr_all = sheet.cell(row=i, column=9).value
-        data_total_amount = sheet.cell(row=i, column=10).value
-        if data_id is None:
-            continue
-
-        data_sku_z_list = []
-        data_count_z_list = []
-        data_price_z_list = []
-        data_sku_c_list = []
-        data_count_c_list = []
-        data_price_c_list = []
-        for tdata in [data_d1, data_d2]:
-            for it_di in tdata.split('┋'):
-                if it_di == '(空)':
-                    continue
-                tcount = int(it_di.split('〖')[-1][0])
-                resId, ratio = softID(it_di.split('〖')[0], commodity_data.keys(), 97)
-                if resId:
-                    it = resId
-                    print(' {} : {} -- {}'.format(ratio, it, it_di))
-                    if commodity_data[it].type == 1:
-                        data_sku_z_list.append(commodity_data[it].id)
-                        data_count_z_list.append(tcount)
-                        data_price_z_list.append(commodity_data[it].price)
-                    else:
-                        data_sku_c_list.append(commodity_data[it].id)
-                        data_count_c_list.append(tcount)
-                        data_price_c_list.append(commodity_data[it].price)
-                    # commodity_data[it].take()
-                    commodity_data[it].addcount(tcount)
-                else:
-                    print('!!!!!!!!!!!!!!!!!! : {}', it_di)
-                    if '金龙鱼' in it_di:
-                        tkey1 = '金龙鱼乳玉皇妃稻香贡米5kg0'
-                        tkey2 = '金龙鱼葵花籽油5L0'
-                        if commodity_data[tkey1].type == 1:
-                            data_sku_z_list.append(commodity_data[tkey1].id)
-                            data_count_z_list.append(commodity_data[tkey1].count)
-                            data_price_z_list.append(commodity_data[tkey1].price)
-                            data_sku_z_list.append(commodity_data[tkey2].id)
-                            data_count_z_list.append(commodity_data[tkey2].count)
-                            data_price_z_list.append(commodity_data[tkey2].price)
-                        else:
-                            data_sku_c_list.append(commodity_data[tkey1].id)
-                            data_count_c_list.append(commodity_data[tkey1].count)
-                            data_price_c_list.append(commodity_data[tkey1].price)
-                            data_sku_c_list.append(commodity_data[tkey2].id)
-                            data_count_c_list.append(commodity_data[tkey2].count)
-                            data_price_c_list.append(commodity_data[tkey2].price)
-
-        type = 0
-        yanzhengall = 0
-        for t_sku_list, t_count_list, t_price_list in zip([data_sku_z_list, data_sku_c_list], [data_count_z_list, data_count_c_list], [data_price_z_list, data_price_c_list]):
-            if len(t_sku_list) == 0:
-                type += 1
-                continue
-            data_price_all = 0
-            for tprice, tcount in zip(t_price_list, t_count_list):
-                data_price_all = data_price_all + tcount * tprice
-            data_sku = ' | '.join(t_sku_list)
-            data_price = ' | '.join(list(map(str, t_price_list)))
-            data_count = ' | '.join(list(map(str, t_count_list)))
-            if '跳过' in data_saddr:
-                data_sheng, data_shi, data_qv = '', '', ''
+    calculate_date = []
+    calculate_time = []
+    calculate_price = []
+    calculate_bz = []
+    calculate_ac_tg = []
+    for it in Date_B_D.keys():
+        T_Day = [0, 0]
+        for itb in Date_B_D[it]:
+            res_date.append(itb.date.date())
+            res_time.append(itb.date.time())
+            res_price.append(itb.figure)
+            res_bz.append('send:{},recv:{},{}'.format(itb.payer_info.name, itb.payee_info.name, itb.type))
+            if itb.type:
+                res_ac_tg.append('{}->{}'.format('耿', itb.from_ac))
+                T_Day[-1] += itb.figure
+                total_price[-1] += itb.figure
             else:
-                data_sheng, data_shi, data_qv = data_saddr.split('-')
+                res_ac_tg.append('{}->{}'.format(itb.from_ac, '耿'))
+                T_Day[0] += itb.figure
+                total_price[0] += itb.figure
 
-            # writeData = [data_id, data_name, data_ipone, data_sku, data_price, data_count, data_price_all, data_price_all,
-            #              data_sname, data_sipone, data_sheng, data_shi, data_qv, data_saddr_all]
+        calculate_date.append(it)
+        calculate_time.append(datetime.time(23, 59))
+        calculate_price.append(T_Day[0] - T_Day[-1])
+        calculate_bz.append('当日差')
+        calculate_ac_tg.append('当日差')
 
-            # writeData = [data_sku, data_price, data_count, data_price_all, data_price_all,
-            #              data_sname, '', data_sipone, data_sheng, data_shi, data_qv, '', data_saddr_all, '', '', '']
+        calculate_date.append(it)
+        calculate_time.append(datetime.time(23, 59))
+        calculate_price.append(total_price[0] - total_price[-1])
+        calculate_bz.append('结转差')
+        calculate_ac_tg.append('结转差')
 
-            writeData = [data_sku, data_price, data_count, data_price_all,
-                         data_sname, '', data_sipone, data_sheng, data_shi, data_qv, '', data_saddr_all, '', '', '']
+    res_date += calculate_date
+    res_time += calculate_time
+    res_bz += calculate_bz
+    res_price += calculate_price
+    res_ac_tg += calculate_ac_tg
 
-            print(writeData)
+    data = {
+        'date': res_date, #6
+        'time': res_time,#6
+        'bz': res_bz,#6
+        'price': res_price,#6
+        'ac_tg': res_ac_tg#6
+    }
 
-            yanzhengall = yanzhengall + data_price_all
-            if type:
-                ws1.append(
-                    writeData)
-            else:
-                ws2.append(
-                    writeData)
-            type += 1
 
-        totalAcountprice[data_sname] = yanzhengall
-        print('all price : {}'.format(yanzhengall))
+    # 创建示例数据
+    # data = {
+    #     'date': ['A', 'B', 'A', 'B', 'A', 'B'], #6
+    #     'time': ['00:00:00', '00:00:00', '00:00:00', '00:00:00', '00:00:00', '00:00:00'],#6
+    #     'bz': ['', '', '', '', '', ''],#6
+    #     'price': [100, 150, 200, 250, 300, 350],#6
+    #     'ac_tg': ['A->X', 'B->X', 'C->X', 'X->A', 'X->D', 'X->D']#6
+    # }
 
-    print(totalAcountprice)
-    print('total acount all price : {}'.format(sum(totalAcountprice.values())))
+    # 将数据转换为 DataFrame
+    df = pd.DataFrame(data)
 
-    for i in commodity_data.keys():
-        if commodity_data[i].total_count > 0:
-            writeData = [commodity_data[i].id, commodity_data[i].name, commodity_data[i].total_count,
-                         commodity_data[i].price, commodity_data[i].total_count*commodity_data[i].price*commodity_data[i].count,
-                         commodity_data[i].geiyuangong, commodity_data[i].total_count*commodity_data[i].geiyuangong*commodity_data[i].count,
-                         commodity_data[i].geishitang, commodity_data[i].total_count*commodity_data[i].geishitang*commodity_data[i].count]
-            print(writeData)
-            ws3.append(
-                writeData)
-    # 保存 Excel 文件
-    wb.save(resultname + str(time.time()) + '.xlsx')
+    # 生成透视表
+    pivot_table = pd.pivot_table(df, values='price', index=['date', 'time', 'bz'], columns='ac_tg', aggfunc='sum')
+
+    pivot_table.to_excel(t_o_p, sheet_name='Pivot_Data')
+    print('export xlsx done')
+
+def foo(data_root_path, output_path):
+    CD, BD = load_data(data_root_path)
+
+    export_data([CD, BD], output_path)
+
 
 
 if __name__ == '__main__':
