@@ -58,7 +58,7 @@ st.dataframe(df_store)
 st.subheader(f"{selected_store} 下单 & 核销趋势")
 
 # 把日期设置为索引，列为折线图多条线
-chart_line_data = df_store.set_index("date")[["下单数", "核销数", "跨天下单核销"]]
+chart_line_data = df_store.set_index("date")[["order_cnt", "redeem_cnt", "redeem_from_prev_days"]]
 
 st.line_chart(chart_line_data)
 
@@ -67,6 +67,6 @@ st.line_chart(chart_line_data)
 # -------------------------------
 st.subheader(f"{selected_store} 每日核销柱状图")
 
-chart_bar_data = df_store.set_index("date")[["核销数", "跨天下单核销"]]
+chart_bar_data = df_store.set_index("date")[["redeem_cnt", "redeem_from_prev_days"]]
 
 st.bar_chart(chart_bar_data)
