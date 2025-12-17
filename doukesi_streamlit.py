@@ -22,33 +22,89 @@ def normalize_store_name(name: str) -> str:
     name = re.sub(r"\s+", "", name)        # 去空格
     return name
 
-from rapidfuzz import process, fuzz
 
-def build_store_mapping(df_mt, df_coupon, score_threshold=85):
+from difflib import SequenceMatcher
+def build_store_mapping(
+    df_mt: pd.DataFrame,
+    df_coupon: pd.DataFrame,
+    threshold: float = 0.8
+) -> pd.DataFrame:
+    """
+    threshold: 相似度阈值，0~1，建议 0.75~0.85
+    """
+
+    mt_names = (
+        df_mt[["poi_id", "poi_name", "norm_name"]]
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+
+    coupon_names = (
+        df_coupon[["poi_id", "poi_name", "norm_name"]]
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+
     mappings = []
 
-    coupon_names = df_coupon[["poi_id", "poi_name", "norm_name"]].drop_duplicates()
+    for _, mt_row in mt_names.iterrows():
+        best_score = 0.0
+        best_match = None
 
-    for _, mt_row in df_mt[["poi_id", "poi_name", "norm_name"]].drop_duplicates().iterrows():
-        match = process.extractOne(
-            mt_row["norm_name"],
-            coupon_names["norm_name"],
-            scorer=fuzz.token_sort_ratio
-        )
+        for _, cp_row in coupon_names.iterrows():
+            score = string_similarity(
+                mt_row["norm_name"],
+                cp_row["norm_name"]
+            )
 
-        if match and match[1] >= score_threshold:
-            matched_row = coupon_names.loc[match[2]]    # label index ✅
+            if score > best_score:
+                best_score = score
+                best_match = cp_row
 
+        if best_match is None or best_score < threshold:
+            continue
 
-            mappings.append({
-                "mt_poi_id": mt_row["poi_id"],
-                "mt_poi_name": mt_row["poi_name"],
-                "coupon_poi_id": matched_row["poi_id"],
-                "coupon_poi_name": matched_row["poi_name"],
-                "score": match[1]
-            })
+        mappings.append({
+            "mt_poi_id": mt_row["poi_id"],
+            "mt_poi_name": mt_row["poi_name"],
+            "coupon_poi_id": best_match["poi_id"],
+            "coupon_poi_name": best_match["poi_name"],
+            "score": round(best_score, 3)
+        })
 
     return pd.DataFrame(mappings)
+
+def string_similarity(a: str, b: str) -> float:
+    if not a or not b:
+        return 0.0
+    return SequenceMatcher(None, a, b).ratio()
+
+# from rapidfuzz import process, fuzz
+# def build_store_mapping(df_mt, df_coupon, score_threshold=85):
+#     mappings = []
+#
+#     coupon_names = df_coupon[["poi_id", "poi_name", "norm_name"]].drop_duplicates()
+#
+#     for _, mt_row in df_mt[["poi_id", "poi_name", "norm_name"]].drop_duplicates().iterrows():
+#         match = process.extractOne(
+#             mt_row["norm_name"],
+#             coupon_names["norm_name"],
+#             scorer=fuzz.token_sort_ratio
+#         )
+#
+#         if match and match[1] >= score_threshold:
+#             matched_row = coupon_names.loc[match[2]]    # label index ✅
+#
+#
+#             mappings.append({
+#                 "mt_poi_id": mt_row["poi_id"],
+#                 "mt_poi_name": mt_row["poi_name"],
+#                 "coupon_poi_id": matched_row["poi_id"],
+#                 "coupon_poi_name": matched_row["poi_name"],
+#                 "score": match[1]
+#             })
+#
+#     return pd.DataFrame(mappings)
 
 
 from dousike_data_class import G_stats, G_orders, G_redeems
@@ -133,8 +189,7 @@ df_coupon_daily_store["norm_name"] = (
 
 df_store_mapping = build_store_mapping(
     df_mt_daily_store,
-    df_coupon_daily_store,
-    score_threshold=85
+    df_coupon_daily_store
 )
 
 poi_id_map = (
