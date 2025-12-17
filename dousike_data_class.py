@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional
+from datetime import datetime
+today_str = datetime.now().strftime("%Y-%m-%d")
+print(today_str)
 
 @dataclass
 class Order:
@@ -110,8 +113,8 @@ def fetch_redeems(start_date: str, end_date: str) -> list[Redeem]:
 
     return redeems
 
-G_orders = fetch_orders("2025-12-01", "2025-12-15")
-G_redeems = fetch_redeems("2025-12-01", "2025-12-15")
+G_orders = fetch_orders("2025-12-01", today_str)
+G_redeems = fetch_redeems("2025-12-01", today_str)
 
 
 
