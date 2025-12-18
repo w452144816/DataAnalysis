@@ -27,7 +27,7 @@ from difflib import SequenceMatcher
 def build_store_mapping(
     df_mt: pd.DataFrame,
     df_coupon: pd.DataFrame,
-    threshold: float = 0.8
+    threshold: float = 0.7
 ) -> pd.DataFrame:
     """
     threshold: 相似度阈值，0~1，建议 0.75~0.85
